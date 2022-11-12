@@ -7,6 +7,12 @@ from PIL import Image, ImageFont, ImageDraw
 
 
 class MonthStat:
+    MONTHS = {
+        1: 'январь', 2: 'февраль', 3: 'март',
+        4: 'апрель', 5: 'май', 6: 'июнь',
+        7: 'июль', 8: 'август', 9: 'сентябрь',
+        10: 'октябрь', 11: 'ноябрь', 12: 'декабрь',
+    }
     COLUMNS = 6
     COLNAMES = ('Дата', 'Мин', 'Ср', 'Макс',
                 'Откл.', 'Осадки, мм')
@@ -17,13 +23,15 @@ class MonthStat:
         }
     timeout = timedelta(hours=1)
 
-    def __init__(self, town_id: int, year: int, month: int):
+    def __init__(self, town_id: int, year: int, month: int,
+                 town_name: str = None):
         self.town_id = town_id
         self.year = year
         self.month = month
         self.time_stamp = datetime.now()
         self._data = {}
         self.__make_data()
+        self.town_name = town_name.capitalize() if town_name else ''
 
     def _get_html(self):
         url = self.site + self.params.format(self.town_id,
@@ -67,7 +75,7 @@ class MonthStat:
                 int(row[0])
             except Exception:
                 continue
-            self._data.update({row[0]: tuple(row[1:self.COLUMNS])})
+            self._data.update({row[0]: tuple(row[:self.COLUMNS])})
 
     @property
     def stat(self):
@@ -79,23 +87,22 @@ class MonthStat:
         return self._data
 
     def __make_table(self, data):
-        table = pt.PrettyTable(
-            self.COLNAMES[1:],
-            border=True, max_width=18,
-        )
+        table = pt.PrettyTable(self.COLNAMES, )
+        table.title = f'{self.MONTHS[self.month]} {self.year}г.' \
+                      f' {self.town_name}'
         for row in data:
             table.add_row(row)
         return table.get_string()
 
-    def _text_to_image(self, text: str, font_sz=8):
+    def _text_to_image(self, text: str, font_sz=14):
         rows_am = text.count('\n')
         simb_am = text.find('\n')
         im_width = int((20 + simb_am * font_sz * 0.56) // 1)
         im_height = 15 + (font_sz + 1) * rows_am
-        im = Image.new("RGB", (im_width, im_height), (255, 255, 255))
+        im = Image.new('RGB', (im_width, im_height), (255, 255, 255))
         dr = ImageDraw.Draw(im)
-        font = ImageFont.truetype("cour.ttf", font_sz)
-        dr.text((10, 5), text, font=font, fill="#000000")
+        font = ImageFont.truetype('cour.ttf', font_sz)
+        dr.text((10, 5), text, font=font, fill='#000000')
         return im
 
     def daystat(self, day: int, pretty: bool = False, as_pic: bool = False):
@@ -157,30 +164,13 @@ class Towns:
             row = self.__get_row(finded_row[0])
             self._data.update(row)
 
-    def get_id(self, name: str):
+    def __update(self):
         now = datetime.now()
         if self._data == {} or (
             (now - self.time_stamp > self.timeout) and
                 now.strftime('%Y') == self.time_stamp.strftime('%Y')):
             self.__make_data()
+
+    def get_id(self, name: str):
+        self.__update()
         return self._data.get(name.lower())
-
-# m = MonthStat(28367, 2020, 7)
-# d = m.daystat(1, pretty=True)
-# # print(d)
-# # print(d.get_string())
-
-# print(d)
-
-# def text_to_image(text: str, font_sz=14):
-#     rows_am = text.count('\n')
-#     simb_am = text.find('\n')
-#     im_width = int((20 + simb_am * font_sz * 0.56) // 1)
-#     im_height = 15 + (font_sz + 1) * rows_am
-#     im = Image.new("RGB", (im_width, im_height), (255, 255, 255))
-#     dr = ImageDraw.Draw(im)
-#     font = ImageFont.truetype("cour.ttf", font_sz)
-#     dr.text((10, 5), text, font=font, fill="#000000")
-#     return im
-
-# print(text_to_image(d))
