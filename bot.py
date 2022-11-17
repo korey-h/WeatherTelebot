@@ -57,7 +57,7 @@ def make_cancel_keys(lang='ru'):
     keyboard = InlineKeyboardMarkup()
     but_cancel = InlineKeyboardButton(
         text=MESSAGES[lang]['cancel'],
-        callback_data=MESSAGES[lang]['cancel'])    
+        callback_data=MESSAGES[lang]['cancel'])
     return keyboard.add(but_cancel, )
 
 
@@ -155,18 +155,23 @@ def get_year_ago(message):
 @bot.message_handler(commands=['десятилетие'])
 def get_decade(message):
     user = get_user(message)
-    keyboard = make_month_keys(lang=user.lang)
-    bot.send_message(
-        user.id,
-        MESSAGES[user.lang]['mess_decade'],
-        reply_markup=keyboard)
+    if not user.town:
+        user.cmd_stack = (message.text, get_decade, message)
+        settown(message, user, MESSAGES[user.lang]['but_town'])
+    elif not user.get_cmd_stack() or (
+            user.get_cmd_stack()['cmd_name'] != message.text):
+        keyboard = make_month_keys(lang=user.lang)
+        bot.send_message(
+            user.id,
+            MESSAGES[user.lang]['mess_decade'],
+            reply_markup=keyboard)
 
 
 @bot.message_handler(content_types=["text"])
 def auditor(message):
     user = get_user(message)
     last_command = user.cmd_stack_pop()
-    if last_command and last_command['cmd'] == '/город':
+    if last_command and last_command['cmd_name'] == '/город':
         kwargs = {}
         town_id = towns.get_id(message.text)
         if town_id:
