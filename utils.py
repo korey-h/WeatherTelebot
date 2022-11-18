@@ -213,7 +213,7 @@ class Towns:
 
 
 def day_for_years(town_id: int, town_name: str,
-                  month: int, day: int, period: int = 10):
+                  month: int, day: int, period: int = 10) -> str:
 
     def prep_stat(stat: list, columns: int):
         if not stat:
