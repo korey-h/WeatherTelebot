@@ -93,7 +93,7 @@ class MonthStat:
                  data: dict, town_name: str = None):
         self.town_id = town_id
         self.year = year
-        self.month = month
+        self.month = month if month <= 12 else 12
         self.mark = (town_id, year, month)
         self.time_stamp = datetime.now()
         self._data = data.copy()
