@@ -19,7 +19,7 @@ class User:
                 s = tuple(cmd_stack)
                 values = s[:4] if len(s) >= 4 else s + (None, )
             else:
-                values = (cmd_stack, cmd_stack, None, None)
+                values = (cmd_stack, cmd_stack, {}, None)
             self._commands.append(
                 {key: val for key, val in zip(KEYS, values)}
             )
