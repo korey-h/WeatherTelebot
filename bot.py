@@ -115,7 +115,7 @@ def welcome(message):
 
 
 @bot.message_handler(commands=['город'])
-def settown(message, user=None, command=None):
+def settown(message, user=None):
     _NAME = 'town'
     if not user:
         user = get_user(message)
@@ -142,8 +142,9 @@ def inline_keys_exec(call):
             MESSAGES[user.lang]['cancel_mess'].format(out))
     else:
         up_stack = user.get_cmd_stack()
-        up_stack['data']['text'] = call.data
-        user.cmd_stack = up_stack
+        if up_stack and up_stack['cmd'] and up_stack['cmd_name']:
+            up_stack['data']['text'] = call.data
+            user.cmd_stack = up_stack
         try_exec_stack(user)
 
 
@@ -165,7 +166,7 @@ def get_year_ago(message):
         next = MESSAGES[user.lang]['but_town']
         name = MESSAGES[user.lang]['but_year_ago']
         user.cmd_stack = (name, get_year_ago, {'message': message}, next)
-        settown(message, user, next)
+        settown(message, user)
 
 
 @bot.message_handler(commands=['десятилетие'])
@@ -176,7 +177,7 @@ def get_decade(*args, **kwargs):
     up_stack = user.get_cmd_stack()
     if not user.town:
         user.cmd_stack = (_NAME, get_decade, {'message': message})
-        settown(message, user, MESSAGES[user.lang]['but_town'])
+        settown(message, user)
     elif not up_stack or (
             up_stack['cmd_name'] != _NAME and
             not up_stack['data'].get('text') and
