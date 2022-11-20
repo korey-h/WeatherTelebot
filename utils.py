@@ -240,6 +240,8 @@ def day_for_years(town_id: int, town_name: str,
     table.add_column('', first_column)
     for num, mark in enumerate(data):
         stat = data[mark].daystat(day)
+        if not stat:
+            return None
         lines = prep_stat(list(stat), len(first_column) + 1)
         table.add_column(col_names[num], lines[1:])
     return table.get_string()
