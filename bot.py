@@ -25,11 +25,9 @@ def get_user(message) -> User:
 
 
 def try_exec_stack(user: User):
-    command = user.cmd_stack_pop()
+    command = user.get_cmd_stack()
     if command and callable(command['cmd']):
         command['cmd'](**command['data'])
-    else:
-        user.cmd_stack = command
 
 
 def get_month_stat(town, town_name, year, month) -> MonthStat:
@@ -44,20 +42,20 @@ def get_month_stat(town, town_name, year, month) -> MonthStat:
     return weather_stat[mark]
 
 
-def make_base_kbd(lang='ru'):
+def make_base_kbd():
     keyboard = ReplyKeyboardMarkup(row_width=4, resize_keyboard=True)
-    but_town = KeyboardButton(MESSAGES[lang]['but_town'])
-    but_year_ago = KeyboardButton(MESSAGES[lang]['but_year_ago'])
-    but_decade = KeyboardButton(MESSAGES[lang]['but_decade'])
+    but_town = KeyboardButton(MESSAGES['but_town'])
+    but_year_ago = KeyboardButton(MESSAGES['but_year_ago'])
+    but_decade = KeyboardButton(MESSAGES['but_decade'])
     keyboard.add(but_town, but_year_ago, but_decade)
     return keyboard
 
 
-def make_cancel_keys(lang='ru'):
+def make_cancel_keys():
     keyboard = InlineKeyboardMarkup()
     but_cancel = InlineKeyboardButton(
-        text=MESSAGES[lang]['cancel'],
-        callback_data=MESSAGES[lang]['cancel'])
+        text=MESSAGES['cancel'],
+        callback_data=MESSAGES['cancel'])
     return keyboard.add(but_cancel, )
 
 
@@ -84,7 +82,7 @@ def make_btn_rows(button_class, names: list,
     return btn_rows
 
 
-def make_month_keys(lang='ru', rows=5):
+def make_month_keys(rows=5):
     names = ['янв', 'февр', 'март', 'апр', 'май', 'июнь',
              'июль', 'авг', 'сент', 'окт', 'нояб', 'дек']
     data = [str(x) for x in range(1, len(names) + 1)]
@@ -92,7 +90,7 @@ def make_month_keys(lang='ru', rows=5):
     return InlineKeyboardMarkup(keyboard=buttons)
 
 
-def make_day_keys(month: int, lang: str = 'ru', rows: int = 7):
+def make_day_keys(month: int, rows: int = 7):
     verge = 31
     if month in (4, 6, 9, 11):
         verge = 30
@@ -107,26 +105,28 @@ def make_day_keys(month: int, lang: str = 'ru', rows: int = 7):
 @bot.message_handler(commands=['start'])
 def welcome(message):
     user = get_user(message)
-    keyboard = make_base_kbd(lang=user.lang)
+    keyboard = make_base_kbd()
     bot.send_message(
         user.id,
-        MESSAGES[user.lang]['welcome'],
+        MESSAGES['welcome'],
         reply_markup=keyboard)
 
 
 @bot.message_handler(commands=['город'])
-def settown(message, user=None):
-    _NAME = 'town'
+def settown(message, user=None, **kwargs):
+    _NAME = 'город'
     if not user:
         user = get_user(message)
-    user.cmd_stack = (_NAME, settown, {'message': message})
-    bot.send_message(user.id, MESSAGES[user.lang]['settown'])
+    last_comm = user.get_cmd_stack()
+    if not last_comm or last_comm['cmd_name'] != _NAME:
+        user.cmd_stack = (_NAME, settown, {'message': message})
+    bot.send_message(user.id, MESSAGES['settown'])
 
 
 @bot.callback_query_handler(func=lambda call: True, )
 def inline_keys_exec(call):
     user = get_user(call.message)
-    if call.data == MESSAGES[user.lang]['cancel']:
+    if call.data == MESSAGES['cancel']:
         command = user.cmd_stack_pop()
         all_comm = [command['cmd_name'], ]
         while command:
@@ -139,11 +139,12 @@ def inline_keys_exec(call):
         out = ', '.join(all_comm)
         bot.send_message(
             user.id,
-            MESSAGES[user.lang]['cancel_mess'].format(out))
+            MESSAGES['cancel_mess'].format(out))
     else:
         up_stack = user.get_cmd_stack()
         if up_stack and up_stack['cmd'] and up_stack['cmd_name']:
             up_stack['data']['text'] = call.data
+            user.cmd_stack_pop()
             user.cmd_stack = up_stack
         try_exec_stack(user)
 
@@ -161,73 +162,86 @@ def get_year_ago(message):
         if data:
             bot.send_photo(user.id, photo=data)
         else:
-            bot.send_message(user.id, MESSAGES[user.lang]['no_data'])
+            bot.send_message(user.id, MESSAGES['no_data'])
+        user.cmd_stack_pop()
     else:
-        next = MESSAGES[user.lang]['but_town']
-        name = MESSAGES[user.lang]['but_year_ago']
+        next = MESSAGES['but_town']
+        name = MESSAGES['but_year_ago']
         user.cmd_stack = (name, get_year_ago, {'message': message}, next)
         settown(message, user)
 
 
-@bot.message_handler(commands=['десятилетие'])
+@bot.message_handler(commands=['десятилетие', '10'])
 def get_decade(*args, **kwargs):
     _NAME = 'decade'
     message = kwargs['message'] if not args else args[0]
     user = get_user(message)
     up_stack = user.get_cmd_stack()
+    cmd_name = up_stack['cmd_name'] if up_stack else None
     if not user.town:
-        user.cmd_stack = (_NAME, get_decade, {'message': message})
+        user.cmd_stack = (_NAME, get_decade,
+                          {'message': message, 'is_run': False})
         settown(message, user)
-    elif not up_stack or (
-            up_stack['cmd_name'] != _NAME and
-            not up_stack['data'].get('text') and
-            not up_stack['data'].get('month')):
-        user.cmd_stack = (_NAME, get_decade, {'message': message})
-        keyboard = make_month_keys(lang=user.lang)
-        bot.send_message(
-            user.id,
-            MESSAGES[user.lang]['mess_decade'],
-            reply_markup=keyboard)
-    elif not up_stack['data'].get('day') and (
-            not up_stack['data'].get('month')):
-        up_stack['data']['month'] = int(up_stack['data']['text'])
-        keyboard = make_day_keys(month=up_stack['data']['month'],
-                                 lang=user.lang)
-        bot.send_message(
-            user.id,
-            MESSAGES[user.lang]['mess_get_day'],
-            reply_markup=keyboard)
+    elif cmd_name != _NAME or not up_stack['data'].get('is_run'):
+        if cmd_name == _NAME:
+            user.cmd_stack_pop()
+        user.cmd_stack = (_NAME, get_decade,
+                          {'message': message, 'is_run': True})
+        keyboard = make_month_keys()
+        bot.send_message(user.id, MESSAGES['mess_decade'],
+                         reply_markup=keyboard)
+
+    elif not up_stack['data'].get('month'):
+        if args:
+            return bot.send_message(user.id, MESSAGES['mess_decade_month'])
+        try:
+            up_stack['data']['month'] = int(up_stack['data']['text'])
+        except Exception:
+            up_stack['data'].pop('text')
+        else:
+            keyboard = make_day_keys(month=up_stack['data']['month'],)
+            return bot.send_message(user.id, MESSAGES['mess_get_day'],
+                                    reply_markup=keyboard)
     elif not up_stack['data'].get('day'):
-        day = int(up_stack['data']['text'])
-        month = up_stack['data']['month']
-        bot.send_message(user.id, "Произвожу сбор статистики.")
-        bot.send_chat_action(user.id, 'typing', 10)
-        stat = day_for_years(town_id=user.town, town_name=user.town_name,
-                             day=day, month=month)
-        bot.send_photo(user.id, photo=MonthStat._text_to_image(stat))
-        user.cmd_stack_pop()
-        try_exec_stack(user)
+        if args:
+            return bot.send_message(user.id, MESSAGES['mess_decade_day'])
+        try:
+            day = int(up_stack['data']['text'])
+        except Exception:
+            pass
+        else:
+            month = up_stack['data']['month']
+            bot.send_message(user.id, "Произвожу сбор статистики.")
+            bot.send_chat_action(user.id, 'typing', 10)
+            stat = day_for_years(town_id=user.town, town_name=user.town_name,
+                                 day=day, month=month)
+            if stat:
+                bot.send_photo(user.id, photo=MonthStat._text_to_image(stat))
+            else:
+                bot.send_message(user.id, MESSAGES['no_data'])
+            user.cmd_stack_pop()
+            try_exec_stack(user)
 
 
 @bot.message_handler(content_types=["text"])
 def auditor(message):
     user = get_user(message)
     last_command = user.cmd_stack_pop()
-    if last_command and last_command['cmd_name'] == 'town':
+    if last_command and last_command['cmd_name'] == 'город':
         kwargs = {}
         town_id = towns.get_id(message.text)
         if town_id:
             user.town = town_id
             user.town_name = message.text.capitalize()
-            mess = MESSAGES[user.lang]['town_finded']
+            mess = MESSAGES['town_finded']
             bot.send_message(user.id, mess, **kwargs)
             bot.send_chat_action(user.id, 'typing', 10)
             try_exec_stack(user)
 
         else:
-            mess = MESSAGES[user.lang]['town_nothing']
+            mess = MESSAGES['town_nothing']
             user.cmd_stack = last_command
-            kwargs = {'reply_markup': make_cancel_keys(lang=user.lang)}
+            kwargs = {'reply_markup': make_cancel_keys()}
             bot.send_message(user.id, mess, **kwargs)
     else:
         user.cmd_stack = last_command
