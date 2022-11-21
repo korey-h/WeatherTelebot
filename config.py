@@ -9,6 +9,7 @@ MESSAGES = {
     'but_town': '/город',
     'but_year_ago': '/год_назад',
     'but_decade': '/десятилетие',
+    'but_chg_mon': 'Изм.мес.',
     'cancel': 'отмена',
     'cancel_mess': 'команда {} отменена',
     'mess_decade':
