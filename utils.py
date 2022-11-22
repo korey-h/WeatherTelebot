@@ -257,3 +257,37 @@ def day_for_years(town_id: int, town_name: str,
         lines = prep_stat(list(stat), len(first_column) + 1)
         table.add_column(col_names[num], lines[1:])
     return table.get_string()
+
+
+def stat_week_before(town_id: int, town_name: str,
+                     month: int, day: int, period: int = 10) -> str:
+    year_now = int(datetime.now().strftime('%Y'))
+    base_months = [(town_id, year_now, month), ]
+    if day - 7 < 0 and month > 1:
+        base_months.append((town_id, year_now, month - 1))
+    elif day - 7 < 0 and month == 1:
+        base_months.append((town_id, year_now - 1, 12))
+
+    params_list = []
+    for i in range(0, period):
+        for mon in base_months:
+            param = {'town_id': mon[0], 'year': mon[1] - i,
+                     'month': mon[2], 'town_name': town_name}
+            params_list.append(param)
+    data = collect_stat(params_list, html_parser, container=MonthStat)
+
+    week_template = []
+    date = day
+    days_count = 7
+    for mark in base_months:
+        if date < 1:
+            mon = data[mark]
+            date = mon.lenth
+        while date >= 1 and days_count > 0:
+            week_template.append((mark, date))
+            date -= 1
+            days_count -= 1
+    week_template.reverse()
+
+
+# stat_week_before(28367, 'TMN', 1, 3, 2)
