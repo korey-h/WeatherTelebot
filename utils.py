@@ -98,6 +98,18 @@ class MonthStat:
         self.time_stamp = datetime.now()
         self._data = data.copy()
         self.town_name = town_name.capitalize() if town_name else ''
+        self.lenth = self._lenth(self.month, self.year)
+
+    @staticmethod
+    def _lenth(month: int, year: int) -> int:
+        if month in (4, 6, 9, 11):
+            return 30
+        elif month == 2:
+            if not year % 4 and (year % 100 and year % 400 or
+                                 not year % 100 and not year % 400):
+                return 29
+            return 28
+        return 31
 
     @property
     def month_name(self):

@@ -232,25 +232,26 @@ def get_decade(*args, **kwargs):
 def auditor(message):
     user = get_user(message)
     last_command = user.cmd_stack_pop()
-    if last_command and last_command['cmd_name'] == 'город':
-        kwargs = {}
-        town_id = towns.get_id(message.text)
-        if town_id:
-            user.town = town_id
-            user.town_name = message.text.capitalize()
-            mess = MESSAGES['town_finded']
-            bot.send_message(user.id, mess, **kwargs)
-            bot.send_chat_action(user.id, 'typing', 10)
-            try_exec_stack(user)
+    if last_command:
+        if last_command['cmd_name'] == 'город':
+            kwargs = {}
+            town_id = towns.get_id(message.text)
+            if town_id:
+                user.town = town_id
+                user.town_name = message.text.capitalize()
+                mess = MESSAGES['town_finded']
+                bot.send_message(user.id, mess, **kwargs)
+                bot.send_chat_action(user.id, 'typing', 10)
+                try_exec_stack(user)
 
+            else:
+                mess = MESSAGES['town_nothing']
+                user.cmd_stack = last_command
+                kwargs = {'reply_markup': make_cancel_keys()}
+                bot.send_message(user.id, mess, **kwargs)
         else:
-            mess = MESSAGES['town_nothing']
             user.cmd_stack = last_command
-            kwargs = {'reply_markup': make_cancel_keys()}
-            bot.send_message(user.id, mess, **kwargs)
-    else:
-        user.cmd_stack = last_command
-        try_exec_stack(user)
+            try_exec_stack(user)
 
 
 @bot.callback_query_handler(func=lambda call: True, )
