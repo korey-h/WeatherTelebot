@@ -246,6 +246,7 @@ def day_for_years(town_id: int, town_name: str,
     col_names = [str(y) for y in range(year_bf, year_now + 1)]
     table = pt.PrettyTable()
     month_name = list(data.values())[0].month_name
+    month_name = month_name[:-1] + 'я'
     table.title = f'{day} {month_name} за период {year_bf}-' \
                   f'{year_now}гг. {town_name}'
 
@@ -307,7 +308,12 @@ def stat_week_before(town_id: int, town_name: str,
             column.append(stat[2])
             column.append(stat[5])
         table.add_column(field_name, column)
-    print(table)
+    m_name = data[base_months[0]].month_name
+    m_name = m_name[:-1] + 'я'
+
+    table.title = f'Статистика погоды на неделе перед {day} {m_name} ' \
+                  f'за период {base_months[-1][1] - period + 1}-{year_now} гг'
+    return table.get_string()
 
 
-# stat_week_before(28367, 'TMN', 1, 2, 5)
+# stat_week_before(28367, 'TMN', 1, 2, 1)
