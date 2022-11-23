@@ -289,5 +289,25 @@ def stat_week_before(town_id: int, town_name: str,
             days_count -= 1
     week_template.reverse()
 
+    table = pt.PrettyTable()
+    first_col = ['-'.join([str(m[1] - i // 2) for m in base_months[::-1]])
+                 if i % 2 == 0 else ''
+                 for i in range(0, period * 2)]
+    second_col = ['ср.темп.' if i % 2 == 0 else 'осадки'
+                  for i in range(0, period * 2)]
+    table.add_column('ГОД', first_col)
+    table.add_column('день/мес.', second_col)
 
-# stat_week_before(28367, 'TMN', 1, 3, 2)
+    for mon, date in week_template:
+        field_name = f'{date}/{mon[2]}'
+        column = []
+        for i in range(0, period):
+            mark = (mon[0], mon[1] - i, mon[2])
+            stat = data[mark].daystat(date)
+            column.append(stat[2])
+            column.append(stat[5])
+        table.add_column(field_name, column)
+    print(table)
+
+
+# stat_week_before(28367, 'TMN', 1, 2, 5)
