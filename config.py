@@ -8,6 +8,7 @@ MESSAGES = {
     'no_data': 'нет данных :(',
     'but_town': '/город',
     'but_year_ago': '/год_назад',
+    'but_week': '/неделя_до',
     'but_decade': '/десятилетие',
     'but_chg_mon': 'Изм.мес.',
     'cancel': 'отмена',

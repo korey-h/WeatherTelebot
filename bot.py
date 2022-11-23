@@ -9,7 +9,10 @@ import os
 
 from config import MESSAGES
 from models import User
-from utils import MonthStat, Towns, collect_stat, html_parser, day_for_years
+from utils import (
+    MonthStat, Towns,
+    collect_stat, html_parser, day_for_years, stat_week_before)
+
 
 load_dotenv('.env')
 
@@ -47,7 +50,8 @@ def make_base_kbd():
     but_town = KeyboardButton(MESSAGES['but_town'])
     but_year_ago = KeyboardButton(MESSAGES['but_year_ago'])
     but_decade = KeyboardButton(MESSAGES['but_decade'])
-    keyboard.add(but_town, but_year_ago, but_decade)
+    but_week = KeyboardButton(MESSAGES['but_week'])
+    keyboard.add(but_town, but_year_ago, but_decade, but_week)
     return keyboard
 
 
@@ -110,6 +114,83 @@ def make_day_keys(month: int, rows: int = 7):
     return InlineKeyboardMarkup(keyboard=buttons)
 
 
+def dialog_mon_day(par_func_name, parent_func, stat_func, *args, **kwargs):
+    ASK_MONTH = 1
+    ASK_DAY = 2
+    ASK_STAT = 3
+
+    message = kwargs['message'] if not args else args[0]
+    user = get_user(message)
+    top_stack = user.get_cmd_stack()
+    cmd_name = top_stack['cmd_name'] if top_stack else None
+    if not user.town:
+        user.cmd_stack = (par_func_name, parent_func,
+                          {'message': message, 'exec_lvl': ASK_MONTH},
+                          settown)
+        settown(message, user)
+    elif cmd_name != par_func_name or (
+            top_stack['data'].get('exec_lvl') == ASK_MONTH):
+        if cmd_name == par_func_name:
+            user.cmd_stack_pop()
+        user.cmd_stack = (
+            par_func_name, parent_func,
+            {'message': message, 'exec_lvl': ASK_DAY, 'text': ''})
+        keyboard = make_month_keys()
+        bot.send_message(user.id, MESSAGES['mess_decade'],
+                         reply_markup=keyboard)
+
+    elif top_stack['data'].get('exec_lvl') == ASK_DAY:
+        if args:
+            return bot.send_message(user.id, MESSAGES['mess_decade_month'])
+        text = top_stack['data']['text']
+        if text == '':
+            keyboard = make_month_keys()
+            return bot.send_message(user.id, MESSAGES['mess_decade'],
+                                    reply_markup=keyboard)
+        try:
+            top_stack['data']['month'] = int(text)
+        except Exception:
+            top_stack['data']['text'] = ''
+        else:
+            user.cmd_stack_pop()
+            top_stack['data']['exec_lvl'] = ASK_STAT
+            user.cmd_stack = top_stack
+            keyboard = make_day_keys(month=top_stack['data']['month'],)
+            top_stack['data']['text'] = ''
+            return bot.send_message(user.id, MESSAGES['mess_get_day'],
+                                    reply_markup=keyboard)
+
+    elif top_stack['data'].get('exec_lvl') == ASK_STAT:
+        if args:
+            return bot.send_message(user.id, MESSAGES['mess_decade_day'])
+        text = top_stack['data']['text']
+        if text == 'chg_month':
+            user.cmd_stack_pop()
+            top_stack['data']['exec_lvl'] = ASK_MONTH
+            user.cmd_stack = top_stack
+            try_exec_stack(user)
+        elif text == '':
+            keyboard = make_day_keys(top_stack['data']['month'])
+            return bot.send_message(user.id, MESSAGES['mess_decade'],
+                                    reply_markup=keyboard)
+        try:
+            day = int(text)
+        except Exception:
+            return
+        else:
+            month = top_stack['data']['month']
+            bot.send_message(user.id, "Произвожу сбор статистики.")
+            bot.send_chat_action(user.id, 'typing', 10)
+            stat = stat_func(town_id=user.town, town_name=user.town_name,
+                             day=day, month=month)
+            if stat:
+                bot.send_photo(user.id, photo=MonthStat._text_to_image(stat))
+            else:
+                bot.send_message(user.id, MESSAGES['no_data'])
+            user.cmd_stack_pop()
+            try_exec_stack(user)
+
+
 @bot.message_handler(commands=['start'])
 def welcome(message):
     user = get_user(message)
@@ -154,78 +235,16 @@ def get_year_ago(message):
         settown(message, user)
 
 
+@bot.message_handler(commands=['неделя_до', '7'])
+def get_week(*args, **kwargs):
+    _NAME = 'неделя_до'
+    dialog_mon_day(_NAME, get_week, stat_week_before, *args, **kwargs)
+
+
 @bot.message_handler(commands=['десятилетие', '10'])
 def get_decade(*args, **kwargs):
     _NAME = 'десятилетие'
-    ASK_MONTH = 1
-    ASK_DAY = 2
-    ASK_STAT = 3
-
-    message = kwargs['message'] if not args else args[0]
-    user = get_user(message)
-    top_stack = user.get_cmd_stack()
-    cmd_name = top_stack['cmd_name'] if top_stack else None
-    if not user.town:
-        user.cmd_stack = (_NAME, get_decade,
-                          {'message': message, 'exec_lvl': ASK_MONTH},
-                          settown)
-        settown(message, user)
-    elif cmd_name != _NAME or top_stack['data'].get('exec_lvl') == ASK_MONTH:
-        if cmd_name == _NAME:
-            user.cmd_stack_pop()
-        user.cmd_stack = (
-            _NAME,
-            get_decade,
-            {'message': message, 'exec_lvl': ASK_DAY, 'text': ''})
-        keyboard = make_month_keys()
-        bot.send_message(user.id, MESSAGES['mess_decade'],
-                         reply_markup=keyboard)
-
-    elif top_stack['data'].get('exec_lvl') == ASK_DAY:
-        if args:
-            return bot.send_message(user.id, MESSAGES['mess_decade_month'])
-        text = top_stack['data']['text']
-        if text == '':
-            keyboard = make_month_keys()
-            return bot.send_message(user.id, MESSAGES['mess_decade'],
-                                    reply_markup=keyboard)
-        try:
-            top_stack['data']['month'] = int(text)
-        except Exception:
-            top_stack['data']['text'] = ''
-        else:
-            user.cmd_stack_pop()
-            top_stack['data']['exec_lvl'] = ASK_STAT
-            user.cmd_stack = top_stack
-            keyboard = make_day_keys(month=top_stack['data']['month'],)
-            return bot.send_message(user.id, MESSAGES['mess_get_day'],
-                                    reply_markup=keyboard)
-
-    elif top_stack['data'].get('exec_lvl') == ASK_STAT:
-        if args:
-            return bot.send_message(user.id, MESSAGES['mess_decade_day'])
-        text = top_stack['data']['text']
-        if text == 'chg_month':
-            user.cmd_stack_pop()
-            top_stack['data']['exec_lvl'] = ASK_MONTH
-            user.cmd_stack = top_stack
-            try_exec_stack(user)
-        try:
-            day = int(text)
-        except Exception:
-            return
-        else:
-            month = top_stack['data']['month']
-            bot.send_message(user.id, "Произвожу сбор статистики.")
-            bot.send_chat_action(user.id, 'typing', 10)
-            stat = day_for_years(town_id=user.town, town_name=user.town_name,
-                                 day=day, month=month)
-            if stat:
-                bot.send_photo(user.id, photo=MonthStat._text_to_image(stat))
-            else:
-                bot.send_message(user.id, MESSAGES['no_data'])
-            user.cmd_stack_pop()
-            try_exec_stack(user)
+    dialog_mon_day(_NAME, get_decade, day_for_years, *args, **kwargs)
 
 
 @bot.message_handler(content_types=["text"])
