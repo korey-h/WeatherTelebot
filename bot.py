@@ -46,7 +46,7 @@ def get_month_stat(town, town_name, year, month) -> MonthStat:
 
 
 def make_base_kbd():
-    keyboard = ReplyKeyboardMarkup(row_width=4, resize_keyboard=True)
+    keyboard = ReplyKeyboardMarkup(row_width=3, resize_keyboard=True)
     but_town = KeyboardButton(MESSAGES['but_town'])
     but_year_ago = KeyboardButton(MESSAGES['but_year_ago'])
     but_decade = KeyboardButton(MESSAGES['but_decade'])

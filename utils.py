@@ -142,15 +142,19 @@ class MonthStat:
         return table.get_string()
 
     @staticmethod
-    def _text_to_image(text: str, font_sz=14):
+    def _text_to_image(text: str, font_sz=16):
+        X, Y = 10, 5
+        chr_width = {10: 6, 12: 7, 14: 8, 16: 10}
+        font_width = chr_width[font_sz] if font_sz in chr_width else 10
+
         rows_am = text.count('\n')
-        simb_am = text.find('\n')
-        im_width = int((20 + simb_am * font_sz * 0.56) // 1)
-        im_height = 15 + (font_sz + 1) * rows_am
+        simb_in_row = text.find('\n')
+        im_width = X * 2 + simb_in_row * font_width
+        im_height = Y * 2 + (font_sz + 2) * (rows_am + 1)
         im = Image.new('RGB', (im_width, im_height), (255, 255, 255))
         dr = ImageDraw.Draw(im)
         font = ImageFont.truetype('cour.ttf', font_sz)
-        dr.text((10, 5), text, font=font, fill='#000000')
+        dr.text((X, Y), text, font=font, fill='#000000')
         return im
 
     def daystat(self, day: int, pretty: bool = False, as_pic: bool = False):
@@ -226,6 +230,10 @@ class Towns:
 
 def day_for_years(town_id: int, town_name: str,
                   month: int, day: int, period: int = 10) -> str:
+    """ Возвращает таблицу в виде строки. Таблица содержит
+    информация о максимальной, минимальной и средней температуре, а также
+    количестве осадков для выбранной даты month, day на протяжении
+    нескольких лет в выбранном периоде period"""
 
     def prep_stat(stat: list, columns: int):
         if not stat:
@@ -262,13 +270,21 @@ def day_for_years(town_id: int, town_name: str,
 
 def stat_week_before(town_id: int, town_name: str,
                      month: int, day: int, period: int = 10) -> str:
+    """ Возвращает таблицу в виде строки. Таблица содержит
+    информация о средней температуре и количестве осадков в течение
+    одной недели до выбранной даты month, day (включая ее) для нескольких лет в
+    выбранном периоде period"""
+
     year_now = int(datetime.now().strftime('%Y'))
+
+    # проверка вхождения дней предыдущего месяца в неделю
     base_months = [(town_id, year_now, month), ]
     if day - 7 < 0 and month > 1:
         base_months.append((town_id, year_now, month - 1))
     elif day - 7 < 0 and month == 1:
         base_months.append((town_id, year_now - 1, 12))
 
+    # определение месяцев, по которым собирается статистика
     params_list = []
     for i in range(0, period):
         for mon in base_months:
@@ -277,6 +293,7 @@ def stat_week_before(town_id: int, town_name: str,
             params_list.append(param)
     data = collect_stat(params_list, html_parser, container=MonthStat)
 
+    # определение дат, попавших в неделю
     week_template = []
     date = day
     days_count = 7
@@ -290,6 +307,7 @@ def stat_week_before(town_id: int, town_name: str,
             days_count -= 1
     week_template.reverse()
 
+    # подготовка оформления таблицы
     table = pt.PrettyTable()
     first_col = ['-'.join([str(m[1] - i // 2) for m in base_months[::-1]])
                  if i % 2 == 0 else ''
@@ -299,6 +317,7 @@ def stat_week_before(town_id: int, town_name: str,
     table.add_column('ГОД', first_col)
     table.add_column('день/мес.', second_col)
 
+    # заполнение таблицы данными
     for mon, date in week_template:
         field_name = f'{date}/{mon[2]}'
         column = []
@@ -314,6 +333,3 @@ def stat_week_before(town_id: int, town_name: str,
     table.title = f'Статистика погоды на неделе перед {day} {m_name} ' \
                   f'за период {base_months[-1][1] - period + 1}-{year_now} гг'
     return table.get_string()
-
-
-# stat_week_before(28367, 'TMN', 1, 2, 1)
