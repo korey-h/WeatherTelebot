@@ -15,6 +15,8 @@ from utils import (
 
 
 load_dotenv('.env')
+with open('about.txt', encoding='utf-8') as f:
+    ABOUT = f.read()
 
 bot = TeleBot(os.getenv('TOKEN'))
 users = {}
@@ -191,14 +193,14 @@ def dialog_mon_day(par_func_name, parent_func, stat_func, *args, **kwargs):
             try_exec_stack(user)
 
 
-@bot.message_handler(commands=['start'])
+@bot.message_handler(commands=['start', 'help'])
 def welcome(message):
     user = get_user(message)
     keyboard = make_base_kbd()
-    bot.send_message(
-        user.id,
-        MESSAGES['welcome'],
-        reply_markup=keyboard)
+    mess = MESSAGES['welcome']
+    if 'help' in message.text:
+        mess = ABOUT
+    bot.send_message(user.id, mess, reply_markup=keyboard)
 
 
 @bot.message_handler(commands=['город'])
