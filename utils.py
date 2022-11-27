@@ -3,7 +3,9 @@ import re
 import requests
 
 from datetime import datetime, timedelta
+from io import StringIO
 from PIL import Image, ImageFont, ImageDraw
+from typing import Tuple
 
 
 def html_parser(html_text: str) -> dict:
@@ -159,6 +161,7 @@ class MonthStat:
 
     def daystat(self, day: int, pretty: bool = False, as_pic: bool = False):
         row = self.stat.get(str(day))
+        row = list(row) + ['-' for x in range(len(self.COLNAMES) - len(row))]
         if pretty:
             row = self.__make_table([row, ])
             if as_pic:
@@ -228,8 +231,21 @@ class Towns:
         return self._data.get(name.lower())
 
 
+def make_csv(rows: list, col_names: list = None) -> StringIO:
+    csv_data = '\ufeff'
+    if col_names:
+        csv_data += ';'.join(col_names) + '\r\n'
+    for row in rows:
+        raw = ';'.join(str(x) for x in row)
+        csv_data += raw.replace('.', ',') + '\r\n'
+    file = StringIO(csv_data)
+    file.name = 'day_for_years.csv'
+    return file
+
+
 def day_for_years(town_id: int, town_name: str,
-                  month: int, day: int, period: int = 10) -> str:
+                  month: int, day: int, period: int = 10, csv=False
+                  ) -> Tuple[str, StringIO]:
     """ Возвращает таблицу в виде строки. Таблица содержит
     информация о максимальной, минимальной и средней температуре, а также
     количестве осадков для выбранной даты month, day на протяжении
@@ -250,7 +266,7 @@ def day_for_years(town_id: int, town_name: str,
     if not data:
         return
 
-    first_column = ('Мин', 'Ср', 'Макс', 'Откл.', 'Осадки, мм')
+    first_column = ('Мин', 'Ср', 'Макс', 'Откл', 'Осадки, мм')
     col_names = [str(y) for y in range(year_bf, year_now + 1)]
     table = pt.PrettyTable()
     month_name = list(data.values())[0].month_name
@@ -265,11 +281,15 @@ def day_for_years(town_id: int, town_name: str,
             return None
         lines = prep_stat(list(stat), len(first_column) + 1)
         table.add_column(col_names[num], lines[1:])
-    return table.get_string()
+    out = {'table': table.get_string()}
+    if csv:
+        out['file'] = make_csv(table.rows, table.field_names)
+    return out
 
 
 def stat_week_before(town_id: int, town_name: str,
-                     month: int, day: int, period: int = 10) -> str:
+                     month: int, day: int, period: int = 10, csv=False
+                     ) -> Tuple[str, StringIO]:
     """ Возвращает таблицу в виде строки. Таблица содержит
     информация о средней температуре и количестве осадков в течение
     одной недели до выбранной даты month, day (включая ее) для нескольких лет в
@@ -331,5 +351,10 @@ def stat_week_before(town_id: int, town_name: str,
     m_name = m_name[:-1] + 'я'
 
     table.title = f'Статистика погоды на неделе перед {day} {m_name} ' \
-                  f'за период {base_months[-1][1] - period + 1}-{year_now} гг'
-    return table.get_string()
+                  f'за период {base_months[-1][1] - period + 1}'\
+                  f'-{year_now} гг.' \
+                  f' {town_name}'
+    out = {'table': table.get_string()}
+    if csv:
+        out['file'] = make_csv(table.rows, table.field_names)
+    return out
