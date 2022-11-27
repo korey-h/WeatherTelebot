@@ -184,9 +184,13 @@ def dialog_mon_day(par_func_name, parent_func, stat_func, *args, **kwargs):
             bot.send_message(user.id, "Произвожу сбор статистики.")
             bot.send_chat_action(user.id, 'typing', 10)
             stat = stat_func(town_id=user.town, town_name=user.town_name,
-                             day=day, month=month)
+                             day=day, month=month, csv=True)
             if stat:
-                bot.send_photo(user.id, photo=MonthStat._text_to_image(stat))
+                bot.send_photo(
+                    user.id,
+                    photo=MonthStat._text_to_image(stat['table']))
+                if stat['file']:
+                    bot.send_document(user.id, stat['file'])
             else:
                 bot.send_message(user.id, MESSAGES['no_data'])
             user.cmd_stack_pop()
@@ -253,7 +257,7 @@ def get_decade(*args, **kwargs):
 def auditor(message):
     user = get_user(message)
     last_command = user.cmd_stack_pop()
-    if last_command:
+    if last_command.get('cmd_name'):
         if last_command['cmd_name'] == 'город':
             kwargs = {}
             town_id = towns.get_id(message.text)
@@ -279,16 +283,16 @@ def auditor(message):
 def inline_keys_exec(call):
     user = get_user(call.message)
     if call.data == 'cancel':
-        command = user.cmd_stack_pop()
-        if not command:
+        up_stack = user.cmd_stack_pop()
+        if not up_stack or not up_stack['cmd_name']:
             return
-        all_comm = [command['cmd_name'], ]
-        while command:
-            cmd = command['cmd']
-            prev = user.cmd_stack_pop()
+        all_comm = [up_stack['cmd_name'], ]
+        while up_stack:
+            cmd = up_stack['cmd']
+            prev = user.get_cmd_stack()
             if not prev or cmd != prev['calling']:
-                user.cmd_stack = prev
                 break
+            user.cmd_stack_pop()
             all_comm.append(prev['cmd_name'])
         out = ', '.join(all_comm)
         bot.send_message(
