@@ -183,8 +183,9 @@ def dialog_mon_day(par_func_name, parent_func, stat_func, *args, **kwargs):
             month = top_stack['data']['month']
             bot.send_message(user.id, "Произвожу сбор статистики.")
             bot.send_chat_action(user.id, 'typing', 10)
+            storage = kwargs.get('storage')
             stat = stat_func(town_id=user.town, town_name=user.town_name,
-                             day=day, month=month, csv=True)
+                             day=day, month=month, csv=True, storage=storage)
             if stat:
                 bot.send_photo(
                     user.id,
@@ -244,6 +245,7 @@ def get_year_ago(message):
 @bot.message_handler(commands=['неделя_до', '7'])
 def get_week(*args, **kwargs):
     _NAME = 'неделя_до'
+    kwargs['storage'] = weather_stat
     dialog_mon_day(_NAME, get_week, stat_week_before, *args, **kwargs)
 
 

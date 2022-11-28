@@ -244,8 +244,8 @@ def make_csv(rows: list, col_names: list = None) -> StringIO:
 
 
 def day_for_years(town_id: int, town_name: str,
-                  month: int, day: int, period: int = 10, csv=False
-                  ) -> Tuple[str, StringIO]:
+                  month: int, day: int, period: int = 10, csv=False,
+                  storage: dict = None) -> Tuple[str, StringIO]:
     """ Возвращает таблицу в виде строки. Таблица содержит
     информация о максимальной, минимальной и средней температуре, а также
     количестве осадков для выбранной даты month, day на протяжении
@@ -258,25 +258,35 @@ def day_for_years(town_id: int, town_name: str,
 
     year_now = int(datetime.now().strftime('%Y'))
     year_bf = year_now - period + 1
-    params_list = [
-        {'town_id': town_id,
-         'month': month,
-         'year': y} for y in range(year_bf, year_now + 1)]
+    params_list = []
+    months = []
+    for y in range(year_bf, year_now + 1):
+        mark = (town_id, y, month)
+        months.append(mark)
+        if (storage and not storage.get(mark)) or not storage:
+            params = {'town_id': town_id, 'month': month,
+                      'town_name': town_name, 'year': y}
+            params_list.append(params)
+
     data = collect_stat(params_list, html_parser, container=MonthStat)
-    if not data:
+    if data and storage is not None:
+        storage.update(data)
+    elif data and storage is None:
+        storage = data
+    elif not data and storage is None:
         return
 
     first_column = ('Мин', 'Ср', 'Макс', 'Откл', 'Осадки, мм')
     col_names = [str(y) for y in range(year_bf, year_now + 1)]
     table = pt.PrettyTable()
-    month_name = list(data.values())[0].month_name
+    month_name = storage[months[0]].month_name
     month_name = month_name[:-1] + 'я'
     table.title = f'{day} {month_name} за период {year_bf}-' \
                   f'{year_now}гг. {town_name}'
 
     table.add_column('', first_column)
-    for num, mark in enumerate(data):
-        stat = data[mark].daystat(day)
+    for num, mark in enumerate(months):
+        stat = storage[mark].daystat(day)
         if not stat:
             return None
         lines = prep_stat(list(stat), len(first_column) + 1)
@@ -288,8 +298,8 @@ def day_for_years(town_id: int, town_name: str,
 
 
 def stat_week_before(town_id: int, town_name: str,
-                     month: int, day: int, period: int = 10, csv=False
-                     ) -> Tuple[str, StringIO]:
+                     month: int, day: int, period: int = 10, csv=False,
+                     storage: dict = None) -> Tuple[str, StringIO]:
     """ Возвращает таблицу в виде строки. Таблица содержит
     информация о средней температуре и количестве осадков в течение
     одной недели до выбранной даты month, day (включая ее) для нескольких лет в
@@ -308,10 +318,19 @@ def stat_week_before(town_id: int, town_name: str,
     params_list = []
     for i in range(0, period):
         for mon in base_months:
-            param = {'town_id': mon[0], 'year': mon[1] - i,
-                     'month': mon[2], 'town_name': town_name}
-            params_list.append(param)
+            mark = (mon[0], mon[1] - i, mon[2])
+            if (storage and not storage.get(mark)) or not storage:
+                param = {'town_id': mon[0], 'year': mon[1] - i,
+                         'month': mon[2], 'town_name': town_name}
+                params_list.append(param)
+
     data = collect_stat(params_list, html_parser, container=MonthStat)
+    if data and storage is not None:
+        storage.update(data)
+    elif data and storage is None:
+        storage = data
+    elif not data and storage is None:
+        return
 
     # определение дат, попавших в неделю
     week_template = []
@@ -319,7 +338,7 @@ def stat_week_before(town_id: int, town_name: str,
     days_count = 7
     for mark in base_months:
         if date < 1:
-            mon = data[mark]
+            mon = storage[mark]
             date = mon.lenth
         while date >= 1 and days_count > 0:
             week_template.append((mark, date))
@@ -343,11 +362,11 @@ def stat_week_before(town_id: int, town_name: str,
         column = []
         for i in range(0, period):
             mark = (mon[0], mon[1] - i, mon[2])
-            stat = data[mark].daystat(date)
+            stat = storage[mark].daystat(date)
             column.append(stat[2])
             column.append(stat[5])
         table.add_column(field_name, column)
-    m_name = data[base_months[0]].month_name
+    m_name = storage[base_months[0]].month_name
     m_name = m_name[:-1] + 'я'
 
     table.title = f'Статистика погоды на неделе перед {day} {m_name} ' \
