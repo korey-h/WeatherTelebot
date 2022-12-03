@@ -152,7 +152,10 @@ def dialog_mon_day(par_func_name, parent_func, stat_func, *args, **kwargs):
         try:
             top_stack['data']['month'] = int(text)
         except Exception:
+            top_stack = user.cmd_stack_pop()
             top_stack['data']['text'] = ''
+            user.cmd_stack = top_stack
+            return
         else:
             user.cmd_stack_pop()
             top_stack['data']['exec_lvl'] = ASK_STAT
@@ -178,6 +181,9 @@ def dialog_mon_day(par_func_name, parent_func, stat_func, *args, **kwargs):
         try:
             day = int(text)
         except Exception:
+            top_stack = user.cmd_stack_pop()
+            top_stack['data']['text'] = ''
+            user.cmd_stack = top_stack
             return
         else:
             month = top_stack['data']['month']
@@ -259,7 +265,7 @@ def get_decade(*args, **kwargs):
 def auditor(message):
     user = get_user(message)
     last_command = user.cmd_stack_pop()
-    if last_command.get('cmd_name'):
+    if last_command and last_command.get('cmd_name'):
         if last_command['cmd_name'] == 'город':
             kwargs = {}
             town_id = towns.get_id(message.text)
