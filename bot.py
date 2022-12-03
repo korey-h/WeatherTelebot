@@ -65,6 +65,14 @@ def make_cancel_keys():
     return keyboard.add(but_cancel, )
 
 
+def make_pass_keys():
+    keyboard = InlineKeyboardMarkup()
+    but_cancel = InlineKeyboardButton(
+        text=MESSAGES['but_pass'],
+        callback_data='pass')
+    return keyboard.add(but_cancel, )
+
+
 def make_btn_rows(button_class, names: list,
                   data: list = None, rows: int = 3,
                   fill: bool = True) -> list:
@@ -119,7 +127,8 @@ def make_day_keys(month: int, rows: int = 7):
 def dialog_mon_day(par_func_name, parent_func, stat_func, *args, **kwargs):
     ASK_MONTH = 1
     ASK_DAY = 2
-    ASK_STAT = 3
+    DAY_SAVE = 3
+    ASK_STAT = 4
 
     message = kwargs['message'] if not args else args[0]
     user = get_user(message)
@@ -158,14 +167,14 @@ def dialog_mon_day(par_func_name, parent_func, stat_func, *args, **kwargs):
             return
         else:
             user.cmd_stack_pop()
-            top_stack['data']['exec_lvl'] = ASK_STAT
+            top_stack['data']['exec_lvl'] = DAY_SAVE
             user.cmd_stack = top_stack
             keyboard = make_day_keys(month=top_stack['data']['month'],)
             top_stack['data']['text'] = ''
             return bot.send_message(user.id, MESSAGES['mess_get_day'],
                                     reply_markup=keyboard)
 
-    elif top_stack['data'].get('exec_lvl') == ASK_STAT:
+    elif top_stack['data'].get('exec_lvl') == DAY_SAVE:
         if args:
             return bot.send_message(user.id, MESSAGES['mess_decade_day'])
         text = top_stack['data']['text']
@@ -186,22 +195,48 @@ def dialog_mon_day(par_func_name, parent_func, stat_func, *args, **kwargs):
             user.cmd_stack = top_stack
             return
         else:
-            month = top_stack['data']['month']
-            bot.send_message(user.id, "Произвожу сбор статистики.")
-            bot.send_chat_action(user.id, 'typing', 10)
-            storage = kwargs.get('storage')
-            stat = stat_func(town_id=user.town, town_name=user.town_name,
-                             day=day, month=month, csv=True, storage=storage)
-            if stat:
-                bot.send_photo(
-                    user.id,
-                    photo=MonthStat._text_to_image(stat['table']))
-                if stat['file']:
-                    bot.send_document(user.id, stat['file'])
+            top_stack = user.cmd_stack_pop()
+            top_stack['data']['day'] = day
+            top_stack['data']['exec_lvl'] = ASK_STAT
+            user.cmd_stack = top_stack
+            keyboard = make_pass_keys()
+            return bot.send_message(user.id, MESSAGES['mess_period'],
+                                    reply_markup=keyboard)
+
+    elif top_stack['data'].get('exec_lvl') == ASK_STAT:
+        if args:
+            return bot.send_message(user.id, MESSAGES['mess_period'])
+        text = top_stack['data']['text']
+        period = 0
+        if text != 'pass':
+            try:
+                period = int(text)
+            except Exception:
+                top_stack = user.cmd_stack_pop()
+                top_stack['data']['text'] = ''
+                user.cmd_stack = top_stack
+                return
+
+        month = top_stack['data']['month']
+        day = top_stack['data']['day']
+        bot.send_message(user.id, "Произвожу сбор статистики.")
+        bot.send_chat_action(user.id, 'typing', 10)
+        storage = kwargs.get('storage')
+        stat = stat_func(town_id=user.town, town_name=user.town_name,
+                         day=day, month=month, period=period, csv=True,
+                         storage=storage)
+        if stat:
+            photo = MonthStat._text_to_image(stat['table'])
+            if photo:
+                bot.send_photo(user.id, photo=photo)
             else:
-                bot.send_message(user.id, MESSAGES['no_data'])
-            user.cmd_stack_pop()
-            try_exec_stack(user)
+                bot.send_message(user.id, MESSAGES['big_photo'])
+            if stat.get('file'):
+                bot.send_document(user.id, stat['file'])
+        else:
+            bot.send_message(user.id, MESSAGES['no_data'])
+        user.cmd_stack_pop()
+        try_exec_stack(user)
 
 
 @bot.message_handler(commands=['start', 'help'])
@@ -283,6 +318,8 @@ def auditor(message):
                 kwargs = {'reply_markup': make_cancel_keys()}
                 bot.send_message(user.id, mess, **kwargs)
         else:
+            if last_command and last_command['cmd']:
+                last_command['data']['text'] = message.text
             user.cmd_stack = last_command
             try_exec_stack(user)
 
