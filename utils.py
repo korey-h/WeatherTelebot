@@ -144,7 +144,7 @@ class MonthStat:
         return table.get_string()
 
     @staticmethod
-    def _text_to_image(text: str, font_sz=16):
+    def _text_to_image(text: str, font_sz=16, width_limit=10000):
         X, Y = 10, 5
         chr_width = {10: 6, 12: 7, 14: 8, 16: 10}
         font_width = chr_width[font_sz] if font_sz in chr_width else 10
@@ -153,6 +153,8 @@ class MonthStat:
         simb_in_row = text.find('\n')
         im_width = X * 2 + simb_in_row * font_width
         im_height = Y * 2 + (font_sz + 2) * (rows_am + 1)
+        if im_width + im_height > width_limit or im_width > 10 * im_height:
+            return None
         im = Image.new('RGB', (im_width, im_height), (255, 255, 255))
         dr = ImageDraw.Draw(im)
         font = ImageFont.truetype('cour.ttf', font_sz)
@@ -231,8 +233,11 @@ class Towns:
         return self._data.get(name.lower())
 
 
-def make_csv(rows: list, col_names: list = None) -> StringIO:
+def make_csv(rows: list, col_names: list = None,
+             title: str = None) -> StringIO:
     csv_data = '\ufeff'
+    if title:
+        csv_data += title + ';' + '\r\n'
     if col_names:
         csv_data += ';'.join(col_names) + '\r\n'
     for row in rows:
@@ -256,6 +261,7 @@ def day_for_years(town_id: int, town_name: str,
             return ['' for x in range(columns)]
         return stat + ['' for x in range(columns - len(stat))]
 
+    period = 10 if period > 60 or period <= 0 else period
     year_now = int(datetime.now().strftime('%Y'))
     year_bf = year_now - period + 1
     params_list = []
@@ -293,7 +299,7 @@ def day_for_years(town_id: int, town_name: str,
         table.add_column(col_names[num], lines[1:])
     out = {'table': table.get_string()}
     if csv:
-        out['file'] = make_csv(table.rows, table.field_names)
+        out['file'] = make_csv(table.rows, table.field_names, table.title)
     return out
 
 
@@ -306,6 +312,7 @@ def stat_week_before(town_id: int, town_name: str,
     выбранном периоде period"""
 
     year_now = int(datetime.now().strftime('%Y'))
+    period = 10 if period > 60 or period <= 0 else period
 
     # проверка вхождения дней предыдущего месяца в неделю
     base_months = [(town_id, year_now, month), ]
@@ -375,5 +382,5 @@ def stat_week_before(town_id: int, town_name: str,
                   f' {town_name}'
     out = {'table': table.get_string()}
     if csv:
-        out['file'] = make_csv(table.rows, table.field_names)
+        out['file'] = make_csv(table.rows, table.field_names, table.title)
     return out
