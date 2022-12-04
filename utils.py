@@ -162,6 +162,7 @@ class MonthStat:
         return im
 
     def daystat(self, day: int, pretty: bool = False, as_pic: bool = False):
+        day = self.lenth if day > self.lenth else day
         row = self.stat.get(str(day))
         row = list(row) + ['-' for x in range(len(self.COLNAMES) - len(row))]
         if pretty:
@@ -234,7 +235,7 @@ class Towns:
 
 
 def make_csv(rows: list, col_names: list = None,
-             title: str = None) -> StringIO:
+             title: str = None, f_name: str = 'info') -> StringIO:
     csv_data = '\ufeff'
     if title:
         csv_data += title + ';' + '\r\n'
@@ -244,13 +245,13 @@ def make_csv(rows: list, col_names: list = None,
         raw = ';'.join(str(x) for x in row)
         csv_data += raw.replace('.', ',') + '\r\n'
     file = StringIO(csv_data)
-    file.name = 'day_for_years.csv'
+    file.name = f_name + '.csv'
     return file
 
 
 def day_for_years(town_id: int, town_name: str,
                   month: int, day: int, period: int = 10, csv=False,
-                  storage: dict = None) -> Tuple[str, StringIO]:
+                  storage: dict = None, **kwargs) -> Tuple[str, StringIO]:
     """ Возвращает таблицу в виде строки. Таблица содержит
     информация о максимальной, минимальной и средней температуре, а также
     количестве осадков для выбранной даты month, day на протяжении
@@ -285,9 +286,9 @@ def day_for_years(town_id: int, town_name: str,
     first_column = ('Мин', 'Ср', 'Макс', 'Откл', 'Осадки, мм')
     col_names = [str(y) for y in range(year_bf, year_now + 1)]
     table = pt.PrettyTable()
-    month_name = storage[months[0]].month_name
-    month_name = month_name[:-1] + 'я'
-    table.title = f'{day} {month_name} за период {year_bf}-' \
+    m_name = storage[months[0]].month_name
+    m_name = m_name + 'а' if m_name[-1] == 'т' else m_name[:-1] + 'я'
+    table.title = f'{day} {m_name} за период {year_bf}-' \
                   f'{year_now}гг. {town_name}'
 
     table.add_column('', first_column)
@@ -299,13 +300,14 @@ def day_for_years(town_id: int, town_name: str,
         table.add_column(col_names[num], lines[1:])
     out = {'table': table.get_string()}
     if csv:
-        out['file'] = make_csv(table.rows, table.field_names, table.title)
+        out['file'] = make_csv(table.rows, table.field_names, table.title,
+                               f_name='day_for_years')
     return out
 
 
 def stat_week_before(town_id: int, town_name: str,
                      month: int, day: int, period: int = 10, csv=False,
-                     storage: dict = None) -> Tuple[str, StringIO]:
+                     storage: dict = None, **kwargs) -> Tuple[str, StringIO]:
     """ Возвращает таблицу в виде строки. Таблица содержит
     информация о средней температуре и количестве осадков в течение
     одной недели до выбранной даты month, day (включая ее) для нескольких лет в
@@ -374,7 +376,7 @@ def stat_week_before(town_id: int, town_name: str,
             column.append(stat[5])
         table.add_column(field_name, column)
     m_name = storage[base_months[0]].month_name
-    m_name = m_name[:-1] + 'я'
+    m_name = m_name + 'а' if m_name[-1] == 'т' else m_name[:-1] + 'я'
 
     table.title = f'Статистика погоды на неделе перед {day} {m_name} ' \
                   f'за период {base_months[-1][1] - period + 1}'\
@@ -382,5 +384,30 @@ def stat_week_before(town_id: int, town_name: str,
                   f' {town_name}'
     out = {'table': table.get_string()}
     if csv:
-        out['file'] = make_csv(table.rows, table.field_names, table.title)
+        out['file'] = make_csv(table.rows, table.field_names, table.title,
+                               f_name='week_before')
     return out
+
+
+def comm_from_text(text: str):
+    func_id = 1
+    period = 0
+
+    date_pattern = re.compile(r'\d{1,2}[-_\/\.]\d{1,2}[-_\/\.]\d\d\d\d')
+    num_patt = re.compile(r'\s*?\d{1,2}\s*?')
+    res = date_pattern.search(text)
+    if not res:
+        return
+    raw_date = res[0]
+    for sep in ('_/.'):
+        raw_date = raw_date.replace(sep, '-')
+    date = raw_date.split('-')
+    res = num_patt.search(text, res.end())
+    func_id = int(res[0].strip()) if res else func_id
+    if res:
+        res = num_patt.search(text, res.end())
+        period = int(res[0].strip()) if res else period
+
+    params = {'day': int(date[0]), 'month': int(date[1]),
+              'year': int(date[2]), 'period': period}
+    return (func_id, params)
