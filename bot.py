@@ -11,7 +11,8 @@ from config import MESSAGES
 from models import User
 from utils import (
     MonthStat, Towns,
-    collect_stat, html_parser, day_for_years, stat_week_before)
+    collect_stat, html_parser, day_for_years, stat_week_before,
+    comm_from_text)
 
 
 load_dotenv('.env')
@@ -124,6 +125,22 @@ def make_day_keys(month: int, rows: int = 7):
     return InlineKeyboardMarkup(keyboard=buttons)
 
 
+def stat_transm(user, stat_func, params):
+    bot.send_message(user.id, "Произвожу сбор статистики.")
+    bot.send_chat_action(user.id, 'typing', 10)
+    stat = stat_func(**params)
+    if stat:
+        photo = MonthStat._text_to_image(stat['table'])
+        if photo:
+            bot.send_photo(user.id, photo=photo)
+        else:
+            bot.send_message(user.id, MESSAGES['big_photo'])
+        if stat.get('file'):
+            bot.send_document(user.id, stat['file'])
+    else:
+        bot.send_message(user.id, MESSAGES['no_data'])
+
+
 def dialog_mon_day(par_func_name, parent_func, stat_func, *args, **kwargs):
     ASK_MONTH = 1
     ASK_DAY = 2
@@ -137,7 +154,7 @@ def dialog_mon_day(par_func_name, parent_func, stat_func, *args, **kwargs):
     if not user.town:
         user.cmd_stack = (par_func_name, parent_func,
                           {'message': message, 'exec_lvl': ASK_MONTH},
-                          settown)
+                          'город')
         settown(message, user)
     elif cmd_name != par_func_name or (
             top_stack['data'].get('exec_lvl') == ASK_MONTH):
@@ -168,9 +185,9 @@ def dialog_mon_day(par_func_name, parent_func, stat_func, *args, **kwargs):
         else:
             user.cmd_stack_pop()
             top_stack['data']['exec_lvl'] = DAY_SAVE
+            top_stack['data']['text'] = ''
             user.cmd_stack = top_stack
             keyboard = make_day_keys(month=top_stack['data']['month'],)
-            top_stack['data']['text'] = ''
             return bot.send_message(user.id, MESSAGES['mess_get_day'],
                                     reply_markup=keyboard)
 
@@ -198,6 +215,7 @@ def dialog_mon_day(par_func_name, parent_func, stat_func, *args, **kwargs):
             top_stack = user.cmd_stack_pop()
             top_stack['data']['day'] = day
             top_stack['data']['exec_lvl'] = ASK_STAT
+            top_stack['data']['text'] = ''
             user.cmd_stack = top_stack
             keyboard = make_pass_keys()
             return bot.send_message(user.id, MESSAGES['mess_period'],
@@ -208,7 +226,9 @@ def dialog_mon_day(par_func_name, parent_func, stat_func, *args, **kwargs):
             return bot.send_message(user.id, MESSAGES['mess_period'])
         text = top_stack['data']['text']
         period = 0
-        if text != 'pass':
+        if text == '':
+            pass
+        elif text != 'pass':
             try:
                 period = int(text)
             except Exception:
@@ -219,22 +239,11 @@ def dialog_mon_day(par_func_name, parent_func, stat_func, *args, **kwargs):
 
         month = top_stack['data']['month']
         day = top_stack['data']['day']
-        bot.send_message(user.id, "Произвожу сбор статистики.")
-        bot.send_chat_action(user.id, 'typing', 10)
         storage = kwargs.get('storage')
-        stat = stat_func(town_id=user.town, town_name=user.town_name,
-                         day=day, month=month, period=period, csv=True,
-                         storage=storage)
-        if stat:
-            photo = MonthStat._text_to_image(stat['table'])
-            if photo:
-                bot.send_photo(user.id, photo=photo)
-            else:
-                bot.send_message(user.id, MESSAGES['big_photo'])
-            if stat.get('file'):
-                bot.send_document(user.id, stat['file'])
-        else:
-            bot.send_message(user.id, MESSAGES['no_data'])
+        params = {'town_id': user.town, 'town_name': user.town_name,
+                  'day': day, 'month': month, 'period': period, 'csv': True,
+                  'storage': storage}
+        stat_transm(user, stat_func, params)
         user.cmd_stack_pop()
         try_exec_stack(user)
 
@@ -261,14 +270,13 @@ def settown(message, user=None, **kwargs):
                      reply_markup=make_cancel_keys())
 
 
-@bot.message_handler(commands=['год_назад'])
-def get_year_ago(message):
+def get_day_info(message, year: int, month: int,
+                 day: int, name: str = '', *args, **kwargs):
+    _NAME = 'по_дате'
+    name = _NAME if name == '' else name
+
     user = get_user(message)
     if user.town:
-        now = datetime.now()
-        day = int(now.strftime('%d'))
-        month = int(now.strftime('%m'))
-        year = int(now.strftime('%Y')) - 1
         stat = get_month_stat(user.town, user.town_name, year, month)
         data = stat.daystat(day, pretty=True, as_pic=True)
         if data:
@@ -277,10 +285,48 @@ def get_year_ago(message):
             bot.send_message(user.id, MESSAGES['no_data'])
         user.cmd_stack_pop()
     else:
-        next = MESSAGES['but_town']
-        name = MESSAGES['but_year_ago']
-        user.cmd_stack = (name, get_year_ago, {'message': message}, next)
+        next = 'город'
+        params = {'message': message, 'year': year, 'month': month,
+                  'day': day, 'name': name}
+        user.cmd_stack = (name, get_day_info, params, next)
         settown(message, user)
+
+
+def func_select(func_id: int, params: dict):
+    _NAME = 'команда'
+    funcs = {1: get_day_info, 7: stat_week_before, 10: day_for_years}
+    user = get_user(params['message'])
+    if not funcs.get(func_id):
+        return bot.send_message(
+            user.id,
+            MESSAGES['mess_unknown_comm'].format(func_id))
+    if not user.town:
+        next = 'город'
+        user.cmd_stack = (
+            _NAME, func_select, {'params': params, 'func_id': func_id},
+            next)
+        settown(params['message'], user)
+    else:
+        func = funcs[func_id]
+        if func_id == 1:
+            return func(**params)
+        params.update({
+            'csv': True,
+            'storage': weather_stat,
+            'town_id': user.town,
+            'town_name': user.town_name})
+        stat_transm(user, funcs[func_id], params)
+        user.cmd_stack_pop()
+
+
+@bot.message_handler(commands=['год_назад'])
+def get_year_ago(message):
+    _NAME = MESSAGES['but_year_ago']
+    now = datetime.now()
+    day = int(now.strftime('%d'))
+    month = int(now.strftime('%m'))
+    year = int(now.strftime('%Y')) - 1
+    get_day_info(message, year, month, day, _NAME)
 
 
 @bot.message_handler(commands=['неделя_до', '7'])
@@ -293,6 +339,7 @@ def get_week(*args, **kwargs):
 @bot.message_handler(commands=['десятилетие', '10'])
 def get_decade(*args, **kwargs):
     _NAME = 'десятилетие'
+    kwargs['storage'] = weather_stat
     dialog_mon_day(_NAME, get_decade, day_for_years, *args, **kwargs)
 
 
@@ -322,6 +369,12 @@ def auditor(message):
                 last_command['data']['text'] = message.text
             user.cmd_stack = last_command
             try_exec_stack(user)
+    else:
+        values = comm_from_text(message.text)
+        if values:
+            params = values[1]
+            params['message'] = message
+            func_select(values[0], params)
 
 
 @bot.callback_query_handler(func=lambda call: True, )
@@ -333,7 +386,7 @@ def inline_keys_exec(call):
             return
         all_comm = [up_stack['cmd_name'], ]
         while up_stack:
-            cmd = up_stack['cmd']
+            cmd = up_stack['cmd_name']
             prev = user.get_cmd_stack()
             if not prev or cmd != prev['calling']:
                 break
