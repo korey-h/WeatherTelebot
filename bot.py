@@ -50,12 +50,15 @@ def get_month_stat(town, town_name, year, month) -> MonthStat:
 
 def make_base_kbd():
     keyboard = ReplyKeyboardMarkup(row_width=3, resize_keyboard=True)
-    but_town = KeyboardButton(MESSAGES['but_town'])
-    but_year_ago = KeyboardButton(MESSAGES['but_year_ago'])
-    but_decade = KeyboardButton(MESSAGES['but_decade'])
-    but_week = KeyboardButton(MESSAGES['but_week'])
-    keyboard.add(but_town, but_year_ago, but_decade, but_week)
-    return keyboard
+    buttons = [
+        KeyboardButton(MESSAGES['but_town']),
+        KeyboardButton(MESSAGES['but_date']),
+        KeyboardButton(MESSAGES['but_year_ago']),
+        KeyboardButton(MESSAGES['but_decade']),
+        KeyboardButton(MESSAGES['but_week']),
+        KeyboardButton(MESSAGES['but_clear']),
+        KeyboardButton(MESSAGES['but_about'])]
+    return keyboard.add(*buttons)
 
 
 def make_cancel_keys():
@@ -258,6 +261,25 @@ def welcome(message):
     bot.send_message(user.id, mess, reply_markup=keyboard)
 
 
+@bot.message_handler(commands=['подсказка'])
+def about(message):
+    user = get_user(message)
+    bot.send_message(user.id, ABOUT)
+
+
+@bot.message_handler(commands=['о_дате'])
+def date(message):
+    user = get_user(message)
+    bot.send_message(user.id, MESSAGES['mess_get_date'])
+
+
+@bot.message_handler(commands=['Отменить_все'])
+def cancel_all(message):
+    user = get_user(message)
+    user.clear_stack()
+    bot.send_message(user.id, MESSAGES['mess_clear'])
+
+
 @bot.message_handler(commands=['город'])
 def settown(message, user=None, **kwargs):
     _NAME = 'город'
@@ -274,8 +296,13 @@ def get_day_info(message, year: int, month: int,
                  day: int, name: str = '', *args, **kwargs):
     _NAME = 'по_дате'
     name = _NAME if name == '' else name
-
     user = get_user(message)
+    last_comm = user.get_cmd_stack()
+    if not last_comm or last_comm['cmd_name'] != name:
+        params = {'message': message, 'year': year, 'month': month,
+                  'day': day, 'name': name}
+        user.cmd_stack = (name, get_day_info, params)
+
     if user.town:
         stat = get_month_stat(user.town, user.town_name, year, month)
         data = stat.daystat(day, pretty=True, as_pic=True)
@@ -284,15 +311,16 @@ def get_day_info(message, year: int, month: int,
         else:
             bot.send_message(user.id, MESSAGES['no_data'])
         user.cmd_stack_pop()
+        try_exec_stack(user)
     else:
         next = 'город'
-        params = {'message': message, 'year': year, 'month': month,
-                  'day': day, 'name': name}
-        user.cmd_stack = (name, get_day_info, params, next)
+        up_stack = user.cmd_stack_pop()
+        up_stack['data']['calling'] = next
+        user.cmd_stack = up_stack
         settown(message, user)
 
 
-def func_select(func_id: int, params: dict):
+def func_select(func_id: int, params: dict, **kwargs):
     _NAME = 'команда'
     funcs = {1: get_day_info, 7: stat_week_before, 10: day_for_years}
     user = get_user(params['message'])
@@ -309,6 +337,11 @@ def func_select(func_id: int, params: dict):
     else:
         func = funcs[func_id]
         if func_id == 1:
+            up_stack = user.get_cmd_stack()
+            if up_stack and up_stack['cmd_name'] == _NAME:
+                user.cmd_stack_pop()
+                up_stack['cmd_name'] = 'по_дате'
+                user.cmd_stack = up_stack
             return func(**params)
         params.update({
             'csv': True,
