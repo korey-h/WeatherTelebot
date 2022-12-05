@@ -26,6 +26,9 @@ class User:
 
     cmd_stack = property(get_cmd_stack, set_cmd_stack)
 
+    def clear_stack(self):
+        self._commands.clear()
+
     def cmd_stack_pop(self):
         if len(self._commands) > 0:
             return self._commands.pop()

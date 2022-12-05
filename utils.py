@@ -389,6 +389,29 @@ def stat_week_before(town_id: int, town_name: str,
     return out
 
 
+def clear_date(date: list) -> list:
+    ''' Принимает последовательность [день, месяц, год].
+    Проверяет, чтобы день и месяц не выходили за допустимые границы.
+    Возвращает подправленный список [день, месяц, год] в
+    целых числах'''
+
+    DAY = 0
+    MONTH = 1
+    YEAR = 2
+    date = [int(d) for d in date]
+    if date[MONTH] > 12:
+        date[MONTH] = 12
+    elif date[MONTH] < 1:
+        date[MONTH] = 1
+
+    m_len = MonthStat._lenth(date[MONTH], date[YEAR])
+    if date[DAY] > m_len:
+        date[DAY] = m_len
+    elif date[DAY] < 1:
+        date[DAY] = 1
+    return date
+
+
 def comm_from_text(text: str):
     func_id = 1
     period = 0
@@ -402,12 +425,13 @@ def comm_from_text(text: str):
     for sep in ('_/.'):
         raw_date = raw_date.replace(sep, '-')
     date = raw_date.split('-')
+    date = clear_date(date)
     res = num_patt.search(text, res.end())
     func_id = int(res[0].strip()) if res else func_id
     if res:
         res = num_patt.search(text, res.end())
         period = int(res[0].strip()) if res else period
 
-    params = {'day': int(date[0]), 'month': int(date[1]),
-              'year': int(date[2]), 'period': period}
+    params = {'day': date[0], 'month': date[1],
+              'year': date[2], 'period': period}
     return (func_id, params)
