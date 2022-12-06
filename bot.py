@@ -258,7 +258,7 @@ def welcome(message):
     mess = MESSAGES['welcome']
     if 'help' in message.text:
         mess = ABOUT
-    bot.send_message(user.id, mess, reply_markup=keyboard)
+    bot.send_message(user.id, mess, reply_markup=keyboard, )
 
 
 @bot.message_handler(commands=['подсказка'])
@@ -273,7 +273,7 @@ def date(message):
     bot.send_message(user.id, MESSAGES['mess_get_date'])
 
 
-@bot.message_handler(commands=['Отменить_все'])
+@bot.message_handler(commands=['отменить_все'])
 def cancel_all(message):
     user = get_user(message)
     user.clear_stack()
