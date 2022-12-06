@@ -71,7 +71,12 @@ def collect_stat(params_list: list, parser_func,
         if r.status_code == 200:
             mark = (town_id, year, month)
             html_text = r.content.decode('utf-8')
-            to_save = parser_func(html_text)
+            try:
+                to_save = parser_func(html_text)
+            except Exception:
+                null_stat = ('-' for _ in range(6))
+                to_save = {d: null_stat for d in range(1, 32)}
+
             if container:
                 data[mark] = container(data=to_save, **params)
             else:
