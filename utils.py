@@ -9,6 +9,10 @@ from typing import Tuple
 
 
 def html_parser(html_text: str) -> dict:
+    '''Ищет в html-тексте данные по шаблону.
+    Найденное возвращает в виде словаря
+    {'A': ('A', 'B', 'C', 'D', 'E', 'F'), }'''
+
     data = {}
     COLUMNS = 6
 
@@ -62,25 +66,31 @@ def collect_stat(params_list: list, parser_func,
     pattern = '/monitor.php?id={}&month={}&year={}'
     session = requests.Session()
     data = {}
+    null_day = ['-' for _ in range(5)]
+    null_stat = {str(d): [str(d)] + null_day for d in range(1, 32)}
+
     for params in params_list:
         town_id = params['town_id']
         month = params['month']
         year = params['year']
         url = site + pattern.format(town_id, month, year)
         r = session.get(url, headers=headers)
+        to_save = null_stat
+        params['bad_data'] = True
         if r.status_code == 200:
             mark = (town_id, year, month)
             html_text = r.content.decode('utf-8')
             try:
                 to_save = parser_func(html_text)
             except Exception:
-                null_stat = ('-' for _ in range(6))
-                to_save = {d: null_stat for d in range(1, 32)}
-
-            if container:
-                data[mark] = container(data=to_save, **params)
+                pass
             else:
-                data[mark] = to_save
+                params['bad_data'] = False
+
+        if container:
+            data[mark] = container(data=to_save, **params)
+        else:
+            data[mark] = to_save
     return data
 
 
@@ -97,13 +107,15 @@ class MonthStat:
     timeout = timedelta(hours=1)
 
     def __init__(self, town_id: int, year: int, month: int,
-                 data: dict, town_name: str = None):
+                 data: dict, town_name: str = None,
+                 bad_data: bool = True):
         self.town_id = town_id
         self.year = year
         self.month = month if month <= 12 else 12
         self.mark = (town_id, year, month)
         self.time_stamp = datetime.now()
         self._data = data.copy()
+        self._bad_data = bad_data
         self.town_name = town_name.capitalize() if town_name else ''
         self.lenth = self._lenth(self.month, self.year)
 
@@ -129,6 +141,8 @@ class MonthStat:
     @property
     def need_upd(self):
         now = datetime.now()
+        if self._bad_data:
+            return True
         if self._data == {} or (
             (now - self.time_stamp > self.timeout) and
                 now.strftime('%Y') == self.time_stamp.strftime('%Y')):
@@ -139,6 +153,7 @@ class MonthStat:
     def update(self, data: dict):
         self._data = data.copy()
         self.time_stamp = datetime.now()
+        self._bad_data = False
 
     def __make_table(self, data):
         table = pt.PrettyTable(self.COLNAMES, )
@@ -175,6 +190,10 @@ class MonthStat:
             if as_pic:
                 row = self._text_to_image(row)
         return row
+
+    @property
+    def stat_pretty(self) -> str:
+        return self.__make_table(self._data.values())
 
 
 class Towns:
@@ -275,7 +294,9 @@ def day_for_years(town_id: int, town_name: str,
     for y in range(year_bf, year_now + 1):
         mark = (town_id, y, month)
         months.append(mark)
-        if (storage and not storage.get(mark)) or not storage:
+        empty = storage and (
+            not storage.get(mark) or storage.get(mark).need_upd)
+        if empty or not storage:
             params = {'town_id': town_id, 'month': month,
                       'town_name': town_name, 'year': y}
             params_list.append(params)
@@ -333,7 +354,9 @@ def stat_week_before(town_id: int, town_name: str,
     for i in range(0, period):
         for mon in base_months:
             mark = (mon[0], mon[1] - i, mon[2])
-            if (storage and not storage.get(mark)) or not storage:
+            empty = storage and (
+                not storage.get(mark) or storage.get(mark).need_upd)
+            if empty or not storage:
                 param = {'town_id': mon[0], 'year': mon[1] - i,
                          'month': mon[2], 'town_name': town_name}
                 params_list.append(param)
