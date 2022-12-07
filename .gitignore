@@ -150,3 +150,5 @@ dmypy.json
 # шрифты
 *.ttf
 
+# вспомогательные файлы
+manutests.py

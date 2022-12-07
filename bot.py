@@ -38,7 +38,8 @@ def try_exec_stack(user: User):
 
 def get_month_stat(town, town_name, year, month) -> MonthStat:
     mark = (town, year, month)
-    if weather_stat.get(mark):
+    mon = weather_stat.get(mark)
+    if mon and not mon.need_upd:
         return weather_stat.get(mark)
     param_list = [
         {'town_id': town, 'year': year,
