@@ -17,7 +17,9 @@ class User:
             KEYS = ('cmd_name', 'cmd', 'data', 'calling')
             if isinstance(cmd_stack, (list, tuple)):
                 s = tuple(cmd_stack)
-                values = s[:4] if len(s) >= 4 else s + (None, )
+                values = s[:4] if len(s) >= len(KEYS) else (
+                    s + tuple(None for _ in range(len(KEYS) - len(s)))
+                    )
             else:
                 values = (cmd_stack, cmd_stack, {}, None)
             self._commands.append(
