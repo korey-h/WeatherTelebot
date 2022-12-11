@@ -440,4 +440,10 @@ def inline_keys_exec(call):
         try_exec_stack(user)
 
 
-bot.polling(non_stop=True)
+if __name__ == '__main__':
+    while True:
+        try:
+            bot.polling(non_stop=True)
+        except Exception:
+            print('--- попытка падения')  # здесь будет логгер
+            pass
