@@ -7,6 +7,8 @@ from telebot.types import (
 from datetime import datetime
 import logging
 import os
+import time
+import threading
 
 from config import MESSAGES
 from logging.handlers import RotatingFileHandler
@@ -32,6 +34,8 @@ handler = RotatingFileHandler(
 logger.addHandler(handler)
 formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
 handler.setFormatter(formatter)
+
+err_info = ''
 
 
 def get_user(message) -> User:
@@ -449,9 +453,30 @@ def inline_keys_exec(call):
         try_exec_stack(user)
 
 
+def err_informer(chat_id):
+    global err_info
+    prev_err = err_info
+    while True:
+        if err_info == '' or err_info == prev_err:
+            time.sleep(60)
+            continue
+        prev_err = err_info
+        try:
+            bot.send_message(
+                chat_id,
+                f'Было выброшено исключение: {err_info}')
+        except Exception:
+            pass
+
+
 if __name__ == '__main__':
+    develop_id = os.getenv('DEVELOP_ID')
+    t1 = threading.Thread(target=err_informer, args=[develop_id])
+    t1.start()
+
     while True:
         try:
             bot.polling(non_stop=True)
         except Exception as error:
+            err_info = error.__repr__()
             logger.exception(error)
