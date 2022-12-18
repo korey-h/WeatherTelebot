@@ -5,9 +5,11 @@ from telebot.types import (
     InlineKeyboardMarkup)
 
 from datetime import datetime
+import logging
 import os
 
 from config import MESSAGES
+from logging.handlers import RotatingFileHandler
 from models import User
 from utils import (
     MonthStat, Towns,
@@ -23,6 +25,13 @@ bot = TeleBot(os.getenv('TOKEN'))
 users = {}
 weather_stat = {}
 towns = Towns()
+
+logger = logging.getLogger(__name__)
+handler = RotatingFileHandler(
+    'exceptions.log', maxBytes=50000000, backupCount=3)
+logger.addHandler(handler)
+formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+handler.setFormatter(formatter)
 
 
 def get_user(message) -> User:
@@ -444,6 +453,5 @@ if __name__ == '__main__':
     while True:
         try:
             bot.polling(non_stop=True)
-        except Exception:
-            print('--- попытка падения')  # здесь будет логгер
-            pass
+        except Exception as error:
+            logger.exception(error)
