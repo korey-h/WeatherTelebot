@@ -15,8 +15,9 @@ from logging.handlers import RotatingFileHandler
 from models import User
 from utils import (
     MonthStat, Towns,
-    collect_stat, html_parser, day_for_years, stat_week_before,
-    comm_from_text)
+    ask_help, collect_stat, comm_from_text, day_for_years, forecast,
+    html_parser, stat_week_before,
+    )
 
 
 load_dotenv('.env')
@@ -416,6 +417,13 @@ def auditor(message):
                 last_command['data']['text'] = message.text
             user.cmd_stack = last_command
             try_exec_stack(user)
+
+    elif ask_help(message.text):
+        bot.send_message(user.id, ABOUT)
+
+    elif forecast(message.text):
+        bot.send_message(user.id, MESSAGES['mess_forecast'])
+
     else:
         values = comm_from_text(message.text)
         if values:

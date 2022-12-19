@@ -1,6 +1,7 @@
 import prettytable as pt
 import re
 import requests
+import time
 
 from datetime import datetime, timedelta
 from io import StringIO
@@ -211,9 +212,19 @@ class Towns:
 
     def _get_html(self):
         url = self.site + self.params
-        r = requests.get(url, headers=self.headers)
-        if r.status_code == 200:
-            return r.content.decode('utf-8')
+        max_req = 24
+        timeout = 10
+        while max_req:
+            try:
+                r = requests.get(url, headers=self.headers)
+            except Exception as e:
+                print(e)
+            else:
+                if r.status_code == 200:
+                    return r.content.decode('utf-8')
+            finally:
+                max_req -= 1
+                time.sleep(timeout)
 
     @staticmethod
     def __get_row(taget_row: str):
@@ -463,3 +474,20 @@ def comm_from_text(text: str):
     params = {'day': date[0], 'month': date[1],
               'year': date[2], 'period': period}
     return (func_id, params)
+
+
+def words_finder(text: str, keywords: list) -> bool:
+    for word in keywords:
+        if word in text:
+            return True
+    return False
+
+
+def ask_help(text: str) -> bool:
+    keywords = ['меню', 'помощ', 'команд', 'можеш', 'умееш']
+    return words_finder(text, keywords)
+
+
+def forecast(text: str) -> bool:
+    keywords = ['завтра', 'через', 'прогноз', 'будущ']
+    return words_finder(text, keywords)
