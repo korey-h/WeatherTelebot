@@ -9,6 +9,7 @@ import logging
 import os
 import time
 import threading
+from typing import Dict, Tuple
 
 from config import MESSAGES
 from logging.handlers import RotatingFileHandler
@@ -16,7 +17,7 @@ from models import User
 from utils import (
     MonthStat, Towns,
     ask_help, collect_stat, comm_from_text, day_for_years, forecast,
-    html_parser, stat_week_before,
+    is_leap_year, html_parser, max_days, stat_week_before,
     )
 
 
@@ -24,9 +25,9 @@ load_dotenv('.env')
 with open('about.txt', encoding='utf-8') as f:
     ABOUT = f.read()
 
-bot = TeleBot(os.getenv('TOKEN'))
+bot = TeleBot(os.getenv('TOKEN')) # type: ignore
 users = {}
-weather_stat = {}
+weather_stat: Dict[Tuple[str, ...], MonthStat] = {}
 towns = Towns()
 
 logger = logging.getLogger(__name__)
@@ -50,7 +51,7 @@ def try_exec_stack(user: User):
         command['cmd'](**command['data'])
 
 
-def get_month_stat(town, town_name, year, month) -> MonthStat:
+def get_month_stat(town, town_name, year, month) -> MonthStat | None:
     mark = (town, year, month)
     mon = weather_stat.get(mark)
     if mon and not mon.need_upd:
@@ -93,7 +94,7 @@ def make_pass_keys():
 
 
 def make_btn_rows(button_class, names: list,
-                  data: list = None, rows: int = 3,
+                  data: list = [], rows: int = 3,
                   fill: bool = True) -> list:
     rows = 8 if rows > 8 else rows
     rows = 1 if rows < 1 else rows
@@ -127,11 +128,7 @@ def make_month_keys(rows=5):
 
 
 def make_day_keys(month: int, rows: int = 7):
-    verge = 31
-    if month in (4, 6, 9, 11):
-        verge = 30
-    elif month == 2:
-        verge = 28
+    verge = max_days(month, True)
     names = [x for x in range(1, verge + 1)]
     data = [x for x in range(1, verge + 1)]
     buttons = make_btn_rows(InlineKeyboardButton, names, data, rows)
@@ -314,13 +311,18 @@ def get_day_info(message, year: int, month: int,
     user = get_user(message)
     last_comm = user.get_cmd_stack()
     if not last_comm or last_comm['cmd_name'] != name:
+        is_29 = False
+        if month == 2:
+            is_29 = is_leap_year(year)
+        max_day = max_days(day, is_29)
+        day = max_day if day > max_day else day
         params = {'message': message, 'year': year, 'month': month,
                   'day': day, 'name': name}
         user.cmd_stack = (name, get_day_info, params)
 
     if user.town:
         stat = get_month_stat(user.town, user.town_name, year, month)
-        data = stat.daystat(day, pretty=True, as_pic=True)
+        data = stat.daystat(day, pretty=True, as_pic=True) # type: ignore
         if data:
             bot.send_photo(user.id, photo=data)
         else:
@@ -411,7 +413,7 @@ def auditor(message):
                 mess = MESSAGES['town_nothing']
                 user.cmd_stack = last_command
                 kwargs = {'reply_markup': make_cancel_keys()}
-                bot.send_message(user.id, mess, **kwargs)
+                bot.send_message(user.id, mess, **kwargs) # type: ignore
         else:
             if last_command and last_command['cmd']:
                 last_command['data']['text'] = message.text

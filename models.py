@@ -1,14 +1,18 @@
+from typing import List
+
+
 class User:
     def __init__(self, id, lang='ru', town=None, town_name=None):
         self.id = id
         self.lang = lang
         self.town = town
         self.town_name = town_name
-        self._commands = []
+        self._commands: List[dict] = []
 
-    def get_cmd_stack(self):
+    def get_cmd_stack(self) -> dict:
         if len(self._commands) > 0:
             return self._commands[-1]
+        return {}
 
     def set_cmd_stack(self, cmd_stack):
         if isinstance(cmd_stack, dict):
@@ -31,6 +35,7 @@ class User:
     def clear_stack(self):
         self._commands.clear()
 
-    def cmd_stack_pop(self):
+    def cmd_stack_pop(self) -> dict:
         if len(self._commands) > 0:
             return self._commands.pop()
+        return {}

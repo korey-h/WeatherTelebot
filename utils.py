@@ -6,10 +6,10 @@ import time
 from datetime import datetime, timedelta
 from io import StringIO
 from PIL import Image, ImageFont, ImageDraw
-from typing import Tuple
+from typing import Dict, List, Tuple
 
 
-def html_parser(html_text: str) -> dict:
+def html_parser(html_text: str) -> Dict[str, Tuple[str, ...]]:
     '''Ищет в html-тексте данные по шаблону.
     Найденное возвращает в виде словаря
     {'A': ('A', 'B', 'C', 'D', 'E', 'F'), }'''
@@ -27,13 +27,13 @@ def html_parser(html_text: str) -> dict:
         page_text = page_text.replace('\n', '')
         l_verge = r'<div[^>]*>\s*<table>'
         r_verge = r'</table>'
-        start = re.search(l_verge, page_text).end()
+        start = re.search(l_verge, page_text).end() # type: ignore
         pattern = re.compile(r_verge)
-        end = pattern.search(page_text, start).start()
+        end = pattern.search(page_text, start).start() # type: ignore
         return page_text[start:end]
 
     if not html_text:
-        return None
+        return {}
     table_area = get_table_area(html_text).replace('\n', '')
     cursor = 0
     size = len(table_area)
@@ -52,8 +52,9 @@ def html_parser(html_text: str) -> dict:
     return data
 
 
-def collect_stat(params_list: list, parser_func,
-                 container=None) -> dict:
+def collect_stat(params_list: List[Dict[str, int|str]],
+                 parser_func,
+                 container=None) -> Dict[Tuple[str, ...], MonthStat]:
     ''' params_list - список словарей содержания
     {town_id: int, year: int, month: int, town_name: str} '''
 
@@ -83,6 +84,7 @@ def collect_stat(params_list: list, parser_func,
             html_text = r.content.decode('utf-8')
             try:
                 to_save = parser_func(html_text)
+                to_save = to_save if to_save else null_stat
             except Exception:
                 pass
             else:
@@ -104,11 +106,13 @@ class MonthStat:
     }
     COLNAMES = ('Дата', 'Мин', 'Ср', 'Макс',
                 'Откл.', 'Осадки, мм')
+    
+    NULL_STAT = ('', '', '', '', '', '')
 
     timeout = timedelta(hours=1)
 
     def __init__(self, town_id: int, year: int, month: int,
-                 data: dict, town_name: str = None,
+                 data: Dict[str,Tuple[str, ...]], town_name: str = '',
                  bad_data: bool = True):
         self.town_id = town_id
         self.year = year
@@ -183,9 +187,10 @@ class MonthStat:
         return im
 
     def daystat(self, day: int, pretty: bool = False, as_pic: bool = False):
-        day = self.lenth if day > self.lenth else day
-        row = self.stat.get(str(day))
-        row = list(row) + ['-' for x in range(len(self.COLNAMES) - len(row))]
+        row = self.NULL_STAT
+        if day <= self.lenth:
+            row = self.stat.get(str(day))
+        row = list(row) + ['-' for x in range(len(self.COLNAMES) - len(row))] # type: ignore
         if pretty:
             row = self.__make_table([row, ])
             if as_pic:
@@ -269,8 +274,8 @@ class Towns:
         return self._data.get(name.lower())
 
 
-def make_csv(rows: list, col_names: list = None,
-             title: str = None, f_name: str = 'info') -> StringIO:
+def make_csv(rows: list, col_names: list = [],
+             title: str = '', f_name: str = 'info') -> StringIO:
     csv_data = '\ufeff'
     if title:
         csv_data += title + ';' + '\r\n'
@@ -286,7 +291,8 @@ def make_csv(rows: list, col_names: list = None,
 
 def day_for_years(town_id: int, town_name: str,
                   month: int, day: int, period: int = 10, csv=False,
-                  storage: dict = None, **kwargs) -> Tuple[str, StringIO]:
+                  storage: Dict[tuple, MonthStat]= {},
+                  **kwargs) -> Dict[str, StringIO]:
     """ Возвращает таблицу в виде строки. Таблица содержит
     информация о максимальной, минимальной и средней температуре, а также
     количестве осадков для выбранной даты month, day на протяжении
@@ -306,7 +312,7 @@ def day_for_years(town_id: int, town_name: str,
         mark = (town_id, y, month)
         months.append(mark)
         empty = storage and (
-            not storage.get(mark) or storage.get(mark).need_upd)
+            not storage.get(mark) or storage.get(mark).need_upd) # type: ignore
         if empty or not storage:
             params = {'town_id': town_id, 'month': month,
                       'town_name': town_name, 'year': y}
@@ -332,10 +338,10 @@ def day_for_years(town_id: int, town_name: str,
     for num, mark in enumerate(months):
         stat = storage[mark].daystat(day)
         if not stat:
-            return None
-        lines = prep_stat(list(stat), len(first_column) + 1)
+            return {}
+        lines = prep_stat(list(stat), len(first_column) + 1) # type: ignore
         table.add_column(col_names[num], lines[1:])
-    out = {'table': table.get_string()}
+    out: dict = {'table': table.get_string()}
     if csv:
         out['file'] = make_csv(table.rows, table.field_names, table.title,
                                f_name='day_for_years')
@@ -344,7 +350,7 @@ def day_for_years(town_id: int, town_name: str,
 
 def stat_week_before(town_id: int, town_name: str,
                      month: int, day: int, period: int = 10, csv=False,
-                     storage: dict = None, **kwargs) -> Tuple[str, StringIO]:
+                     storage: dict = {}, **kwargs) -> Dict[str, StringIO]:
     """ Возвращает таблицу в виде строки. Таблица содержит
     информация о средней температуре и количестве осадков в течение
     одной недели до выбранной даты month, day (включая ее) для нескольких лет в
@@ -353,10 +359,14 @@ def stat_week_before(town_id: int, town_name: str,
     year_now = int(datetime.now().strftime('%Y'))
     period = 10 if period > 60 or period <= 0 else period
 
+    check_leap_year = False
+
     # проверка вхождения дней предыдущего месяца в неделю
     base_months = [(town_id, year_now, month), ]
     if day - 7 < 0 and month > 1:
         base_months.append((town_id, year_now, month - 1))
+        if month - 1 == 2:
+            check_leap_year = True
     elif day - 7 < 0 and month == 1:
         base_months.append((town_id, year_now - 1, 12))
 
@@ -366,7 +376,7 @@ def stat_week_before(town_id: int, town_name: str,
         for mon in base_months:
             mark = (mon[0], mon[1] - i, mon[2])
             empty = storage and (
-                not storage.get(mark) or storage.get(mark).need_upd)
+                not storage.get(mark) or storage.get(mark).need_upd) # type: ignore
             if empty or not storage:
                 param = {'town_id': mon[0], 'year': mon[1] - i,
                          'month': mon[2], 'town_name': town_name}
@@ -380,6 +390,14 @@ def stat_week_before(town_id: int, town_name: str,
     elif not data and storage is None:
         return
 
+    # поиск 29 февраля
+    has_29 = False
+    if check_leap_year:
+        check_period = period if period <= 4 else 4
+        for y in range(year_now, year_now - check_period, -1):
+            if is_leap_year(y):
+                has_29 = True
+
     # определение дат, попавших в неделю
     week_template = []
     date = day
@@ -388,6 +406,9 @@ def stat_week_before(town_id: int, town_name: str,
         if date < 1:
             mon = storage[mark]
             date = mon.lenth
+            if has_29:
+                date = 29
+                days_count += 1
         while date >= 1 and days_count > 0:
             week_template.append((mark, date))
             date -= 1
@@ -421,7 +442,7 @@ def stat_week_before(town_id: int, town_name: str,
                   f'за период {base_months[-1][1] - period + 1}'\
                   f'-{year_now} гг.' \
                   f' {town_name}'
-    out = {'table': table.get_string()}
+    out: dict = {'table': table.get_string()}
     if csv:
         out['file'] = make_csv(table.rows, table.field_names, table.title,
                                f_name='week_before')
@@ -491,3 +512,22 @@ def ask_help(text: str) -> bool:
 def forecast(text: str) -> bool:
     keywords = ['завтра', 'через', 'прогноз', 'будущ']
     return words_finder(text, keywords)
+
+
+def is_leap_year(year:int) -> bool:
+    if not year % 400:
+        return True
+    elif not year % 4:
+        if year % 100:
+            return True
+    return False
+
+def max_days(month: int, is_leap = False):
+    verge = 31
+    if month in (4, 6, 9, 11):
+        verge = 30
+    elif month == 2:
+        verge = 28
+        if is_leap:
+            verge = 29
+    return verge
