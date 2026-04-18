@@ -1,0 +1,9 @@
+version: '3.3'
+  
+services:
+      
+  weateher-bot:
+    image: weateher-bot:latest
+    restart: always
+  volumes:
+    - ./errlogs:./errlogs

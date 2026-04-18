@@ -32,7 +32,7 @@ towns = Towns()
 
 logger = logging.getLogger(__name__)
 handler = RotatingFileHandler(
-    'exceptions.log', maxBytes=50000000, backupCount=3)
+    'errlogs/exceptions.log', maxBytes=50000000, backupCount=3)
 logger.addHandler(handler)
 formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
 handler.setFormatter(formatter)
