@@ -5,5 +5,5 @@ services:
   weather-bot:
     image: weather-bot:latest
     restart: always
-  volumes:
-    - ./code/logs:./logs
+    volumes:
+      - ./code/logs:/code/logs

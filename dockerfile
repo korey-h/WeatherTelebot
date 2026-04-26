@@ -1,5 +1,4 @@
-FROM python:3.8.5
-RUN  apt install nano
+FROM python:3.14.3
 RUN mkdir /code
 WORKDIR /code
 COPY ./code .
